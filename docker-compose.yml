@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+
+  # If you need to add MongoDB container, uncomment this section
+  # mongodb:
+  #   image: mongo:latest
+  #   restart: always
+  #   environment:
+  #     - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+  #     - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+  #   volumes:
+  #     - mongodb-data:/data/db
+  #   networks:
+  #     - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+# Uncomment if using the MongoDB container
+# volumes:
+#   mongodb-data:
+#     driver: local
