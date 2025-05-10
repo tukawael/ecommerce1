@@ -1,217 +1,247 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { useAuth } from "./AuthContext";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import { apiRequest } from '@/lib/queryClient';
 
-type CartProduct = {
-  id: number;
-  name: string;
-  price: number;
-  imageUrl: string;
-  isOnSale?: boolean;
-  originalPrice?: number;
-};
-
-type CartItem = {
+export type CartItem = {
   id: number;
   quantity: number;
-  product: CartProduct;
+  product: {
+    id: number;
+    name: string;
+    price: number;
+    imageUrl: string;
+    isOnSale: boolean | null;
+    originalPrice: number;
+  };
 };
 
-type CartContextType = {
+export type CartContextType = {
   cartItems: CartItem[];
   cartTotal: number;
   isCartOpen: boolean;
   isLoading: boolean;
-  shippingCost: number;
+  error: string | null;
   toggleCart: () => void;
-  addToCart: (productId: number, quantity: number) => void;
-  updateCartItemQuantity: (itemId: number, quantity: number) => void;
-  removeCartItem: (itemId: number) => void;
-  clearCart: () => void;
+  openCart: () => void;
+  closeCart: () => void;
+  addToCart: (productId: number, quantity: number) => Promise<void>;
+  updateCartItem: (itemId: number, quantity: number) => Promise<void>;
+  removeFromCart: (itemId: number) => Promise<void>;
+  clearCart: () => Promise<void>;
 };
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+export const CartContext = createContext<CartContextType | undefined>(undefined);
 
-export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartTotal, setCartTotal] = useState<number>(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  // Try to use auth context, but provide fallbacks if not available
-  let isAuthenticated = false;
-  let token = null;
-  let showAuthModal = () => {};
-  
-  try {
-    const auth = useAuth();
-    isAuthenticated = auth.isAuthenticated;
-    token = auth.token;
-    showAuthModal = auth.showAuthModal;
-  } catch (error) {
-    console.log('Auth context not available yet, using defaults');
-  }
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const shippingCost = 4.99;
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch cart data from API if authenticated
-  const { 
-    data: cartData,
-    isLoading: isCartLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["/api/cart", token],
-    enabled: isAuthenticated,
-    // The queryFn is set in the queryClient configuration
-  });
-
-  // Apply defaults for cartData in case it's not available
-  const cartItems: CartItem[] = cartData && typeof cartData === 'object' && cartData !== null && 'items' in cartData 
-    ? (cartData as any).items 
-    : [];
-  const cartTotal: number = cartData && typeof cartData === 'object' && cartData !== null && 'total' in cartData 
-    ? (cartData as any).total 
-    : 0;
-
-  const toggleCart = useCallback(() => {
-    setIsCartOpen((prev) => !prev);
+  // Fetch cart items when component mounts
+  useEffect(() => {
+    fetchCartItems();
   }, []);
 
-  // Add to cart mutation
-  const addToCartMutation = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      const res = await apiRequest("POST", "/api/cart", { productId, quantity });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      toast({
-        title: "Added to cart",
-        description: "Item has been added to your cart",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to add item to cart: ${error instanceof Error ? error.message : "Unknown error"}`,
-        variant: "destructive",
-      });
-    },
-  });
+  const fetchCartItems = async () => {
+    setIsLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setCartItems([]);
+        setCartTotal(0);
+        return;
+      }
 
-  // Update cart item mutation
-  const updateCartItemMutation = useMutation({
-    mutationFn: async ({ itemId, quantity }: { itemId: number; quantity: number }) => {
-      const res = await apiRequest("PUT", `/api/cart/${itemId}`, { quantity });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to update cart: ${error instanceof Error ? error.message : "Unknown error"}`,
-        variant: "destructive",
+      const response = await apiRequest<{ items: CartItem[], total: number }>('/cart', {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-    },
-  });
-
-  // Remove cart item mutation
-  const removeCartItemMutation = useMutation({
-    mutationFn: async (itemId: number) => {
-      const res = await apiRequest("DELETE", `/api/cart/${itemId}`, undefined);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      toast({
-        title: "Removed from cart",
-        description: "Item has been removed from your cart",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to remove item: ${error instanceof Error ? error.message : "Unknown error"}`,
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Clear cart mutation
-  const clearCartMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/cart", undefined);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      toast({
-        title: "Cart cleared",
-        description: "All items have been removed from your cart",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to clear cart: ${error instanceof Error ? error.message : "Unknown error"}`,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const addToCart = useCallback((productId: number, quantity: number) => {
-    if (!isAuthenticated) {
-      showAuthModal();
-      return;
+      
+      setCartItems(response.items || []);
+      setCartTotal(response.total || 0);
+    } catch (error) {
+      console.error('Error fetching cart items:', error);
+      // Don't show error for unauthorized - user might not be logged in
+      if (error instanceof Error && !error.message.includes('401')) {
+        setError('Failed to load cart items');
+      }
+    } finally {
+      setIsLoading(false);
     }
-    
-    addToCartMutation.mutate({ productId, quantity });
-  }, [isAuthenticated, showAuthModal, addToCartMutation]);
-
-  const updateCartItemQuantity = useCallback((itemId: number, quantity: number) => {
-    updateCartItemMutation.mutate({ itemId, quantity });
-  }, [updateCartItemMutation]);
-
-  const removeCartItem = useCallback((itemId: number) => {
-    removeCartItemMutation.mutate(itemId);
-  }, [removeCartItemMutation]);
-
-  const clearCart = useCallback(() => {
-    clearCartMutation.mutate();
-  }, [clearCartMutation]);
-
-  // If there's an error fetching the cart, show a toast
-  useEffect(() => {
-    if (isError) {
-      toast({
-        title: "Error",
-        description: "Failed to load your cart. Please try again.",
-        variant: "destructive",
-      });
-    }
-  }, [isError, toast]);
-
-  const value = {
-    cartItems,
-    cartTotal,
-    isCartOpen,
-    isLoading: isCartLoading || addToCartMutation.isPending || updateCartItemMutation.isPending || removeCartItemMutation.isPending || clearCartMutation.isPending,
-    shippingCost,
-    toggleCart,
-    addToCart,
-    updateCartItemQuantity,
-    removeCartItem,
-    clearCart,
   };
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  const toggleCart = () => {
+    setIsCartOpen(!isCartOpen);
+  };
+
+  const openCart = () => {
+    setIsCartOpen(true);
+  };
+
+  const closeCart = () => {
+    setIsCartOpen(false);
+  };
+
+  const addToCart = async (productId: number, quantity: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please sign in to add items to your cart');
+        return;
+      }
+
+      await apiRequest('/cart', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: { productId, quantity }
+      });
+
+      // Refresh cart items after adding
+      await fetchCartItems();
+      
+      // Open cart drawer after adding item
+      openCart();
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to add item to cart';
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateCartItem = async (itemId: number, quantity: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please sign in to update your cart');
+        return;
+      }
+
+      // If quantity is 0, remove the item
+      if (quantity <= 0) {
+        await removeFromCart(itemId);
+        return;
+      }
+
+      await apiRequest(`/cart/${itemId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: { quantity }
+      });
+
+      // Refresh cart items after updating
+      await fetchCartItems();
+    } catch (error) {
+      console.error('Error updating cart item:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to update cart item';
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeFromCart = async (itemId: number) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please sign in to remove items from your cart');
+        return;
+      }
+
+      await apiRequest(`/cart/${itemId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // Refresh cart items after removing
+      await fetchCartItems();
+    } catch (error) {
+      console.error('Error removing from cart:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to remove item from cart';
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const clearCart = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('Please sign in to clear your cart');
+        return;
+      }
+
+      await apiRequest('/cart', {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      // Clear local cart items
+      setCartItems([]);
+      setCartTotal(0);
+    } catch (error) {
+      console.error('Error clearing cart:', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to clear cart';
+      
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <CartContext.Provider
+      value={{
+        cartItems,
+        cartTotal,
+        isCartOpen,
+        isLoading,
+        error,
+        toggleCart,
+        openCart,
+        closeCart,
+        addToCart,
+        updateCartItem,
+        removeFromCart,
+        clearCart
+      }}
+    >
+      {children}
+    </CartContext.Provider>
+  );
 };
 
 export const useCart = () => {
   const context = useContext(CartContext);
   if (context === undefined) {
-    throw new Error("useCart must be used within a CartProvider");
+    throw new Error('useCart must be used within a CartProvider');
   }
   return context;
 };
+

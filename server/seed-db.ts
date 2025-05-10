@@ -159,6 +159,103 @@ const seedDatabase = async () => {
         isOnSale: true,
         salePrice: 79.99,
         isNew: false
+      },
+
+      {
+        name: "Scented Candle Set",
+        slug: "scented-candle-set",
+        description: "Relaxing scented candles with lavender, vanilla, and rose",
+        price: 29.99,
+        imageUrl: "https://images.unsplash.com/photo-1616627781605-5651fba3cf45",
+        stock: 75,
+        categoryId: categoryMap.get("home-living"),
+        isOnSale: true,
+        salePrice: 24.99,
+        isNew: true
+      },
+      {
+        name: "Organic Skincare Kit",
+        slug: "organic-skincare-kit",
+        description: "All-natural skincare kit with cleanser, toner, and moisturizer",
+        price: 49.99,
+        imageUrl: "https://images.unsplash.com/photo-1616394582781-dfed79f07770",
+        stock: 40,
+        categoryId: categoryMap.get("beauty"),
+        isOnSale: false,
+        salePrice: null,
+        isNew: true
+      },
+      {
+        name: "LED Makeup Mirror",
+        slug: "led-makeup-mirror",
+        description: "Makeup mirror with adjustable LED lighting and magnification",
+        price: 39.99,
+        imageUrl: "https://images.unsplash.com/photo-1580910051071-df664b02c64d",
+        stock: 30,
+        categoryId: categoryMap.get("beauty"),
+        isOnSale: false,
+        salePrice: null,
+        isNew: false
+      },
+      {
+        name: "Modern Floor Lamp",
+        slug: "modern-floor-lamp",
+        description: "Elegant floor lamp with warm lighting for living rooms",
+        price: 119.99,
+        imageUrl: "https://images.unsplash.com/photo-1587502536263-3b8b2c7ff60a",
+        stock: 25,
+        categoryId: categoryMap.get("home-living"),
+        isOnSale: true,
+        salePrice: 99.99,
+        isNew: false
+      },
+      {
+        name: "Women's Handbag",
+        slug: "womens-handbag",
+        description: "Premium leather handbag for everyday use",
+        price: 89.99,
+        imageUrl: "https://images.unsplash.com/photo-1542060748-10c28b62716f",
+        stock: 35,
+        categoryId: categoryMap.get("fashion"),
+        isOnSale: false,
+        salePrice: null,
+        isNew: false
+      },
+      {
+        name: "Gaming Keyboard",
+        slug: "gaming-keyboard",
+        description: "RGB mechanical keyboard with fast response keys",
+        price: 129.99,
+        imageUrl: "https://images.unsplash.com/photo-1610563166151-0ff2c90b3b6b",
+        stock: 80,
+        categoryId: categoryMap.get("electronics"),
+        isOnSale: true,
+        salePrice: 109.99,
+        isNew: true
+      },
+      {
+        name: "Electric Kettle",
+        slug: "electric-kettle",
+        description: "Stainless steel kettle with fast boil and auto shut-off",
+        price: 49.99,
+        imageUrl: "https://images.unsplash.com/photo-1614350044396-d0607f956170",
+        stock: 60,
+        categoryId: categoryMap.get("home-living"),
+        isOnSale: false,
+        salePrice: null,
+        isNew: true
+      },
+      {
+        name: "Hair Dryer Pro",
+        slug: "hair-dryer-pro",
+        description: "Salon-grade hair dryer with multiple speed settings",
+        price: 69.99,
+        imageUrl: "https://images.unsplash.com/photo-1608479444889-0db3dbed03e2",
+        stock: 45,
+        categoryId: categoryMap.get("beauty"),
+        isOnSale: true,
+        salePrice: 54.99,
+        isNew: false
       }
     ];
     

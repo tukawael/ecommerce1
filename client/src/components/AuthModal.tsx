@@ -3,106 +3,184 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
 
-const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required")
-});
+type LoginFormValues = {
+  username: string;
+  email: string;
+  password: string;
+};
 
-const registerSchema = z.object({
-  username: z.string().min(3, "Username must be at least 3 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(1, "Please confirm your password")
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-type RegisterFormValues = z.infer<typeof registerSchema>;
+type RegisterFormValues = {
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
 
 const AuthModal = () => {
-  // Default values for auth context
-  let isAuthModalOpen = false;
-  let closeAuthModal = () => {};
-  let login = (_username: string, _password: string) => Promise.resolve();
-  let registerUser = (_data: RegisterFormValues) => Promise.resolve();
-  let isLoading = false;
-  let error: string | null = null;
+  const {
+    isAuthModalOpen,
+    closeAuthModal,
+    login,
+    register: registerUser,
+    isLoading,
+    error,
+  } = useAuth();
   
-  try {
-    const auth = useAuth();
-    isAuthModalOpen = auth.isAuthModalOpen;
-    closeAuthModal = auth.closeAuthModal;
-    login = auth.login;
-    registerUser = auth.register;
-    isLoading = auth.isLoading;
-    error = auth.error;
-  } catch (e) {
-    console.log('Auth context not available in AuthModal');
-  }
-  const [isLogin, setIsLogin] = useState(true);
+  const { toast } = useToast();
 
-  const loginForm = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      username: "",
-      password: ""
-    }
+  const [isLogin, setIsLogin] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // States for form values
+  const [loginFormValues, setLoginFormValues] = useState<LoginFormValues>({
+    username: "",
+    email: "",
+    password: "",
   });
 
-  const registerForm = useForm<RegisterFormValues>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      username: "",
-      email: "",
-      password: "",
-      confirmPassword: ""
-    }
+  const [registerFormValues, setRegisterFormValues] = useState<RegisterFormValues>({
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
   });
 
   useEffect(() => {
     if (!isAuthModalOpen) {
-      // Reset forms when modal is closed
-      loginForm.reset();
-      registerForm.reset();
+      setLoginFormValues({
+        username: "",
+        email: "",
+        password: "",
+      });
+      setRegisterFormValues({
+        username: "",
+        email: "",
+        password: "",
+        confirmPassword: "",
+      });
       setIsLogin(true);
+      setFormError(null);
     }
-  }, [isAuthModalOpen, loginForm, registerForm]);
+  }, [isAuthModalOpen]);
 
-  const onLoginSubmit = (data: LoginFormValues) => {
-    login(data.username, data.password);
+  useEffect(() => {
+    setFormError(error);
+  }, [error]);
+
+  // Validate login form
+  const validateLogin = (data: LoginFormValues) => {
+    if (!data.username || !data.email || !data.password) {
+      return "All fields are required";
+    }
+    if (!/\S+@\S+\.\S+/.test(data.email)) {
+      return "Please enter a valid email address";
+    }
+    return null;
   };
 
-  const onRegisterSubmit = (data: RegisterFormValues) => {
-    registerUser(data);
+  // Validate registration form
+  const validateRegister = (data: RegisterFormValues) => {
+    if (!data.username || !data.email || !data.password || !data.confirmPassword) {
+      return "All fields are required";
+    }
+    if (!/\S+@\S+\.\S+/.test(data.email)) {
+      return "Please enter a valid email address";
+    }
+    if (data.password !== data.confirmPassword) {
+      return "Passwords do not match";
+    }
+    if (data.password.length < 6) {
+      return "Password must be at least 6 characters long";
+    }
+    return null;
+  };
+
+  // Handle form submission
+  const onLoginSubmit = async (data: LoginFormValues) => {
+    setFormError(null);
+    const error = validateLogin(data);
+    if (error) {
+      setFormError(error);
+      return;
+    }
+    try {
+      await login(data);
+    } catch (error) {
+      console.error("Login error:", error);
+      setFormError(
+        error instanceof Error ? error.message : "Unexpected login error"
+      );
+    }
+  };
+
+  const onRegisterSubmit = async (data: RegisterFormValues) => {
+    setFormError(null);
+    const error = validateRegister(data);
+    if (error) {
+      setFormError(error);
+      return;
+    }
+    try {
+      const successMessage = await registerUser(data);
+      
+      // Show success toast
+      toast({
+        title: "Registration Successful",
+        description: successMessage,
+        duration: 5000,
+      });
+      
+      // Switch to login form
+      setIsLogin(true);
+    } catch (error) {
+      console.error("Register error:", error);
+      setFormError(
+        error instanceof Error ? error.message : "Unexpected registration error"
+      );
+    }
   };
 
   const toggleForm = () => {
     setIsLogin(!isLogin);
-    // Reset error when switching forms
+    setFormError(null);
+  };
+
+  // Handle input change for login and registration forms
+  const handleLoginInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setLoginFormValues({
+      ...loginFormValues,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleRegisterInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setRegisterFormValues({
+      ...registerFormValues,
+      [e.target.name]: e.target.value,
+    });
   };
 
   if (!isAuthModalOpen) return null;
 
   return (
     <>
-      <div 
+      <div
         className="fixed inset-0 bg-black bg-opacity-50 z-40"
         onClick={closeAuthModal}
-      ></div>
-      
-      <div className="fixed inset-0 flex items-center justify-center z-50" onClick={(e) => e.stopPropagation()}>
+      />
+      <div
+        className="fixed inset-0 flex items-center justify-center z-50"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 overflow-hidden">
           <div className="flex justify-between items-center p-6 border-b">
-            <h2 className="text-xl font-bold">{isLogin ? "Sign In" : "Create Account"}</h2>
-            <Button 
-              variant="ghost" 
+            <h2 className="text-xl font-bold">
+              {isLogin ? "Sign In" : "Create Account"}
+            </h2>
+            <Button
+              variant="ghost"
               size="icon"
               onClick={closeAuthModal}
               className="text-neutral-500 hover:text-neutral-800"
@@ -111,159 +189,166 @@ const AuthModal = () => {
               <X />
             </Button>
           </div>
-          
-          {/* Login Form */}
+
           {isLogin ? (
-            <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="p-6">
-                <FormField
-                  control={loginForm.control}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                onLoginSubmit(loginFormValues);
+              }}
+              className="p-6"
+            >
+              <div className="mb-4">
+                <label htmlFor="username" className="block text-sm font-medium">
+                  Username
+                </label>
+                <Input
+                  id="username"
                   name="username"
-                  render={({ field }) => (
-                    <FormItem className="mb-4">
-                      <FormLabel>Username</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Enter your username" 
-                          className="w-full"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  value={loginFormValues.username}
+                  onChange={handleLoginInputChange}
+                  placeholder="Enter username"
+                  autoComplete="off"
                 />
-                
-                <FormField
-                  control={loginForm.control}
+              </div>
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={loginFormValues.email}
+                  onChange={handleLoginInputChange}
+                  placeholder="Enter email"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="mb-6">
+                <div className="flex justify-between items-center mb-1">
+                  <label htmlFor="password" className="block text-sm font-medium">
+                    Password
+                  </label>
+                  <a
+                    href="#"
+                    className="text-sm text-primary hover:text-primary/80"
+                  >
+                    Forgot Password?
+                  </a>
+                </div>
+                <Input
+                  id="password"
                   name="password"
-                  render={({ field }) => (
-                    <FormItem className="mb-6">
-                      <div className="flex justify-between items-center mb-1">
-                        <FormLabel>Password</FormLabel>
-                        <a href="#" className="text-sm text-primary hover:text-primary/80">
-                          Forgot Password?
-                        </a>
-                      </div>
-                      <FormControl>
-                        <Input 
-                          type="password" 
-                          placeholder="Enter your password" 
-                          className="w-full"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  type="password"
+                  value={loginFormValues.password}
+                  onChange={handleLoginInputChange}
+                  placeholder="Enter password"
                 />
-                
-                {error && <p className="text-destructive text-sm mb-4">{error}</p>}
-                
-                <Button 
-                  type="submit" 
-                  className="w-full mb-4"
-                  disabled={isLoading}
+              </div>
+
+              {formError && (
+                <p className="text-destructive text-sm mb-4">{formError}</p>
+              )}
+
+<Button type="submit" className="w-full mb-4" disabled={isLoading}>
+                {isLoading ? "Signing in..." : "Sign In"}
+              </Button>
+
+              <div className="text-center text-sm">
+                <span className="text-neutral-600">Don't have an account?</span>
+                <Button
+                  variant="link"
+                  className="text-primary hover:text-primary/80 p-0 h-auto"
+                  onClick={toggleForm}
+                  type="button"
                 >
-                  {isLoading ? "Signing in..." : "Sign In"}
+                  Create Account
                 </Button>
-                
-                <div className="text-center text-sm">
-                  <span className="text-neutral-600">Don't have an account?</span>
-                  <Button 
-                    variant="link" 
-                    className="text-primary hover:text-primary/80 p-0 h-auto"
-                    onClick={toggleForm}
-                    type="button"
-                  >
-                    Create Account
-                  </Button>
-                </div>
-              </form>
-            </Form>
+              </div>
+            </form>
           ) : (
-            /* Register Form */
-            <Form {...registerForm}>
-              <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="p-6">
-                <div className="mb-4">
-                  <label htmlFor="username" className="block text-sm font-medium mb-1">Username</label>
-                  <input
-                    id="username"
-                    type="text"
-                    placeholder="Choose a username"
-                    className="w-full px-3 py-2 border rounded-md"
-                    {...registerForm.register("username")}
-                  />
-                  {registerForm.formState.errors.username && (
-                    <p className="text-red-500 text-sm mt-1">{registerForm.formState.errors.username.message}</p>
-                  )}
-                </div>
-                
-                <div className="mb-4">
-                  <label htmlFor="email" className="block text-sm font-medium mb-1">Email Address</label>
-                  <input
-                    id="email"
-                    type="email"
-                    placeholder="Enter your email address"
-                    className="w-full px-3 py-2 border rounded-md"
-                    {...registerForm.register("email")}
-                  />
-                  {registerForm.formState.errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{registerForm.formState.errors.email.message}</p>
-                  )}
-                </div>
-                
-                <div className="mb-4">
-                  <label htmlFor="password" className="block text-sm font-medium mb-1">Password</label>
-                  <input
-                    id="password"
-                    type="password"
-                    placeholder="Create a password"
-                    className="w-full px-3 py-2 border rounded-md"
-                    {...registerForm.register("password")}
-                  />
-                  {registerForm.formState.errors.password && (
-                    <p className="text-red-500 text-sm mt-1">{registerForm.formState.errors.password.message}</p>
-                  )}
-                </div>
-                
-                <div className="mb-6">
-                  <label htmlFor="confirmPassword" className="block text-sm font-medium mb-1">Confirm Password</label>
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    placeholder="Confirm your password"
-                    className="w-full px-3 py-2 border rounded-md"
-                    {...registerForm.register("confirmPassword")}
-                  />
-                  {registerForm.formState.errors.confirmPassword && (
-                    <p className="text-red-500 text-sm mt-1">{registerForm.formState.errors.confirmPassword.message}</p>
-                  )}
-                </div>
-                
-                {error && <p className="text-destructive text-sm mb-4">{error}</p>}
-                
-                <Button 
-                  type="submit" 
-                  className="w-full mb-4"
-                  disabled={isLoading}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                onRegisterSubmit(registerFormValues);
+              }}
+              className="p-6"
+            >
+              <div className="mb-4">
+                <label htmlFor="username" className="block text-sm font-medium">
+                  Username
+                </label>
+                <Input
+                  id="username"
+                  name="username"
+                  value={registerFormValues.username}
+                  onChange={handleRegisterInputChange}
+                  placeholder="Choose a username"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium">
+                  Email
+                </label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={registerFormValues.email}
+                  onChange={handleRegisterInputChange}
+                  placeholder="Enter email"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="password" className="block text-sm font-medium">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  value={registerFormValues.password}
+                  onChange={handleRegisterInputChange}
+                  placeholder="Enter password"
+                />
+              </div>
+              <div className="mb-6">
+                <label htmlFor="confirmPassword" className="block text-sm font-medium">
+                  Confirm Password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  value={registerFormValues.confirmPassword}
+                  onChange={handleRegisterInputChange}
+                  placeholder="Confirm password"
+                />
+              </div>
+
+              {formError && (
+                <p className="text-destructive text-sm mb-4">{formError}</p>
+              )}
+
+              <Button type="submit" className="w-full mb-4" disabled={isLoading}>
+                {isLoading ? "Creating Account..." : "Create Account"}
+              </Button>
+
+              <div className="text-center text-sm">
+                <span className="text-neutral-600">Already have an account?</span>
+                <Button
+                  variant="link"
+                  className="text-primary hover:text-primary/80 p-0 h-auto"
+                  onClick={toggleForm}
+                  type="button"
                 >
-                  {isLoading ? "Creating Account..." : "Create Account"}
+                  Sign In
                 </Button>
-                
-                <div className="text-center text-sm">
-                  <span className="text-neutral-600">Already have an account?</span>
-                  <Button 
-                    variant="link" 
-                    className="text-primary hover:text-primary/80 p-0 h-auto"
-                    onClick={toggleForm}
-                    type="button"
-                  >
-                    Sign In
-                  </Button>
-                </div>
-              </form>
-            </Form>
+              </div>
+            </form>
           )}
         </div>
       </div>

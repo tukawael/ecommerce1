@@ -1,32 +1,78 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
-import { useCart } from "@/context/CartContext";
+import { CartContext } from "@/context/CartContext";
 import { ProductWithCategory } from "@shared/schema";
 import { formatPrice, generateStarRating } from "@/lib/utils";
 import QuantityControl from "@/components/QuantityControl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Helmet } from "react-helmet";
+import { Helmet } from 'react-helmet-async';
+import { useToast } from "@/hooks/use-toast";
+import { AuthContext } from "@/context/AuthContext";
 
 const ProductDetails = () => {
   const { slug } = useParams();
-  
-  // Default values for cart context
-  let addToCart = (_productId: number, _quantity: number) => {};
-  let isCartLoading = false;
-  
-  try {
-    const cart = useCart();
-    addToCart = cart.addToCart;
-    isCartLoading = cart.isLoading;
-  } catch (error) {
-    console.log('Cart context not available in ProductDetails');
-  }
-  
+  const { toast } = useToast();
+  const cartContext = useContext(CartContext);
+  const authContext = useContext(AuthContext);
+
+  // Log context availability for debugging
+  useEffect(() => {
+    console.error('CartContext in ProductDetails:', {
+      context: cartContext,
+      isContextDefined: cartContext !== undefined
+    });
+  }, [cartContext]);
+
+  // Fallback addToCart method if context is not available
+  const handleAddToCart = useCallback((productId: number, quantity: number) => {
+    if (!cartContext?.addToCart) {
+      // Fallback mechanism with detailed error handling
+      if (!authContext?.isAuthenticated) {
+        toast({
+          title: "Login Required",
+          description: "Please log in to add items to cart",
+          variant: "destructive"
+        });
+        authContext?.showAuthModal();
+        return;
+      }
+
+      // Manual cart addition if context is unavailable
+      try {
+        const token = localStorage.getItem("token");
+        const response = fetch("/api/cart", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+          },
+          body: JSON.stringify({ productId, quantity })
+        });
+
+        toast({
+          title: "Added to Cart",
+          description: "Item successfully added to your cart",
+        });
+      } catch (error) {
+        console.error("Manual cart addition failed:", error);
+        toast({
+          title: "Cart Error",
+          description: "Failed to add item to cart",
+          variant: "destructive"
+        });
+      }
+      return;
+    }
+
+    // Use context method if available
+    cartContext.addToCart(productId, quantity);
+  }, [cartContext, authContext, toast]);
+
   const [quantity, setQuantity] = useState(1);
 
   // Fetch product details
@@ -39,9 +85,9 @@ const ProductDetails = () => {
     queryKey: [`/api/products/${slug}`],
   });
 
-  const handleAddToCart = () => {
+  const handleAddToCartWithQuantity = () => {
     if (!product) return;
-    addToCart(product.id, quantity);
+    handleAddToCart(product.id, quantity);
   };
 
   if (isLoading) {
@@ -206,9 +252,9 @@ const ProductDetails = () => {
                 </div>
                 
                 <Button 
-                  onClick={handleAddToCart}
+                  onClick={handleAddToCartWithQuantity}
                   className="flex-1 h-12"
-                  disabled={isCartLoading || product.stock <= 0}
+                  disabled={!authContext?.isAuthenticated || product.stock <= 0}
                 >
                   <ShoppingCart className="mr-2 h-5 w-5" />
                   {product.stock > 0 ? "Add to Cart" : "Out of Stock"}

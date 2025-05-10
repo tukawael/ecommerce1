@@ -117,78 +117,6 @@ export class MemStorage implements IStorage {
         isOnSale: false,
         salePrice: null,
         isNew: false
-      },
-      {
-        name: "Smartphone Pro",
-        slug: "smartphone-pro",
-        description: "Latest smartphone with advanced camera and long battery life",
-        price: 899.99,
-        imageUrl: "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd",
-        stock: 20,
-        categoryId: 1,
-        isOnSale: false,
-        salePrice: null,
-        isNew: false
-      },
-      {
-        name: "Wireless Earbuds",
-        slug: "wireless-earbuds",
-        description: "Comfortable wireless earbuds with crystal clear sound",
-        price: 59.99,
-        imageUrl: "https://images.unsplash.com/photo-1608156639585-b3a032ef9689",
-        stock: 100,
-        categoryId: 1,
-        isOnSale: false,
-        salePrice: null,
-        isNew: true
-      },
-      {
-        name: "Red Sneakers",
-        slug: "red-sneakers",
-        description: "Stylish and comfortable red sneakers for everyday wear",
-        price: 89.99,
-        imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff",
-        stock: 45,
-        categoryId: 2,
-        isOnSale: false,
-        salePrice: null,
-        isNew: false
-      },
-      {
-        name: "Digital Camera",
-        slug: "digital-camera",
-        description: "Professional digital camera with high resolution sensor",
-        price: 599.99,
-        imageUrl: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32",
-        stock: 15,
-        categoryId: 1,
-        isOnSale: true,
-        salePrice: 499.99,
-        isNew: false
-      },
-      {
-        name: "Laptop Pro",
-        slug: "laptop-pro",
-        description: "Powerful laptop for professionals and creators",
-        price: 1299.99,
-        imageUrl: "https://images.unsplash.com/photo-1496181133206-80ce9b88a853",
-        stock: 10,
-        categoryId: 1,
-        isOnSale: false,
-        salePrice: null,
-        isNew: false
-      },
-      {
-        name: "Travel Backpack",
-        slug: "travel-backpack",
-        description: "Durable backpack with multiple compartments for travel",
-        price: 99.99,
-        imageUrl: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62",
-        stock: 60,
-        categoryId: 2,
-        isOnSale: true,
-        salePrice: 79.99,
-        isNew: false
       }
     ];
     
@@ -219,7 +147,13 @@ export class MemStorage implements IStorage {
   
   async createUser(user: InsertUser): Promise<User> {
     const id = this.userId++;
-    const newUser: User = { ...user, id, isAdmin: false };
+    const newUser: User = { 
+      ...user, 
+      id,
+      fullName: user.fullName ?? null,
+      address: user.address ?? null,
+      isAdmin: false 
+    };
     this.users.set(id, newUser);
     return newUser;
   }
@@ -239,7 +173,11 @@ export class MemStorage implements IStorage {
   
   async createCategory(category: InsertCategory): Promise<Category> {
     const id = this.categoryId++;
-    const newCategory: Category = { ...category, id };
+    const newCategory: Category = { 
+      ...category, 
+      id,
+      imageUrl: category.imageUrl ?? null
+    };
     this.categories.set(id, newCategory);
     return newCategory;
   }
@@ -271,7 +209,9 @@ export class MemStorage implements IStorage {
       ...product, 
       id, 
       rating: 4.5, 
-      reviewCount: Math.floor(Math.random() * 200) + 1 
+      reviewCount: Math.floor(Math.random() * 200) + 1,
+      salePrice: product.salePrice ?? null,
+      categoryId: product.categoryId ?? null
     };
     this.products.set(id, newProduct);
     return newProduct;
@@ -289,7 +229,12 @@ export class MemStorage implements IStorage {
   async createOrder(order: InsertOrder): Promise<Order> {
     const id = this.orderId++;
     const date = new Date();
-    const newOrder: Order = { ...order, id, createdAt: date };
+    const newOrder: Order = { 
+      ...order, 
+      id, 
+      createdAt: date,
+      status: order.status ?? 'pending'
+    };
     this.orders.set(id, newOrder);
     return newOrder;
   }
@@ -376,6 +321,8 @@ export class PgStorage implements IStorage {
   async createUser(user: InsertUser): Promise<User> {
     const result = await this.db.insert(users).values({
       ...user,
+      fullName: user.fullName ?? null,
+      address: user.address ?? null,
       isAdmin: false
     }).returning();
     return result[0];
@@ -397,7 +344,10 @@ export class PgStorage implements IStorage {
   }
 
   async createCategory(category: InsertCategory): Promise<Category> {
-    const result = await this.db.insert(categories).values(category).returning();
+    const result = await this.db.insert(categories).values({
+      ...category,
+      imageUrl: category.imageUrl ?? null
+    }).returning();
     return result[0];
   }
 
@@ -428,7 +378,9 @@ export class PgStorage implements IStorage {
     const result = await this.db.insert(products).values({
       ...product,
       rating: 4.5,
-      reviewCount: Math.floor(Math.random() * 200) + 1
+      reviewCount: Math.floor(Math.random() * 200) + 1,
+      salePrice: product.salePrice ?? null,
+      categoryId: product.categoryId ?? null
     }).returning();
     return result[0];
   }
@@ -444,7 +396,10 @@ export class PgStorage implements IStorage {
   }
 
   async createOrder(order: InsertOrder): Promise<Order> {
-    const result = await this.db.insert(orders).values(order).returning();
+    const result = await this.db.insert(orders).values({
+      ...order,
+      status: order.status ?? 'pending'
+    }).returning();
     return result[0];
   }
 
@@ -497,7 +452,6 @@ export class PgStorage implements IStorage {
   }
 }
 
-// Create a common storage instance that we can switch between implementations
 // MongoDB Storage Implementation
 export class MongoDbStorage implements IStorage {
   private client: any;
@@ -530,6 +484,8 @@ export class MongoDbStorage implements IStorage {
     const newUser = { 
       ...user, 
       id: await this.getNextId('users'),
+      fullName: user.fullName ?? null,
+      address: user.address ?? null,
       isAdmin: false 
     };
     await this.getCollection('users').insertOne(newUser);
@@ -554,7 +510,8 @@ export class MongoDbStorage implements IStorage {
   async createCategory(category: InsertCategory): Promise<Category> {
     const newCategory = { 
       ...category, 
-      id: await this.getNextId('categories') 
+      id: await this.getNextId('categories'),
+      imageUrl: category.imageUrl ?? null
     };
     await this.getCollection('categories').insertOne(newCategory);
     return newCategory;
@@ -588,7 +545,9 @@ export class MongoDbStorage implements IStorage {
       ...product, 
       id: await this.getNextId('products'),
       rating: 4.5,
-      reviewCount: Math.floor(Math.random() * 200) + 1
+      reviewCount: Math.floor(Math.random() * 200) + 1,
+      salePrice: product.salePrice ?? null,
+      categoryId: product.categoryId ?? null
     };
     await this.getCollection('products').insertOne(newProduct);
     return newProduct;
@@ -608,7 +567,8 @@ export class MongoDbStorage implements IStorage {
     const newOrder = { 
       ...order, 
       id: await this.getNextId('orders'),
-      createdAt: new Date()
+      createdAt: new Date(),
+      status: order.status ?? 'pending'
     };
     await this.getCollection('orders').insertOne(newOrder);
     return newOrder;
@@ -668,10 +628,8 @@ export class MongoDbStorage implements IStorage {
 
   // Helper method to get the next ID for a collection
   private async getNextId(collectionName: string): Promise<number> {
-    // Get counters collection
     const countersCollection = this.client.db('ecommerce').collection('counters');
     
-    // Update the counter or create it if it doesn't exist
     const result = await countersCollection.findOneAndUpdate(
       { _id: collectionName },
       { $inc: { sequence_value: 1 } },
